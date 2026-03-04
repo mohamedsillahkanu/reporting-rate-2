@@ -941,7 +941,7 @@ function drawHeatmap(data, locKey, timeKey, rrKey) {
     const locs = Object.entries(locMap).map(([l,d])=>({loc:l,avg:d.cnt?d.sum/d.cnt:0,vals:d.vals}));
     locs.sort((a,b)=>b.avg-a.avg);
 
-    const mg = {top:110, bottom:90, left:55, right:30};
+    const mg = {top:110, bottom:90, left:25, right:30};
     const hmW = cW-mg.left-mg.right, hmH = cH-mg.top-mg.bottom;
     const cw = hmW/times.length, ch = hmH/locs.length;
 
@@ -983,15 +983,7 @@ function drawHeatmap(data, locKey, timeKey, rrKey) {
         });
     });
 
-    // Y axis ticks (location names)
-    ctx.textAlign='right'; ctx.fillStyle='#333'; ctx.font=`${tkFS}px Oswald,sans-serif`;
-    const yStep = Math.max(1,Math.ceil(locs.length/40));
-    locs.forEach(({loc},li)=>{
-        if(li%yStep===0){
-            const label = loc.length>22?loc.substring(0,20)+'…':loc;
-            ctx.fillText(label, sx-5, sy+li*ch+ch/2+tkFS/2-1);
-        }
-    });
+    // Y axis ticks — numbers only, no location names
 
     // X axis ticks
     ctx.textAlign='right'; ctx.fillStyle='#333'; ctx.font=`${tkFS}px Oswald,sans-serif`;
