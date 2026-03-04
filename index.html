@@ -430,6 +430,7 @@
 // STATE
 // ============================================================
 let rawData = null, allColumns = [], selectedPalette = 'viridis', selectedMethod = 1;
+let _locCol = 'location', _hfCol = 'hf'; // actual selected column names
 
 // Processed outputs (keyed by method 1,2,3)
 let hfWithReports = [], hfNoReports = [];
@@ -615,6 +616,7 @@ function processData() {
 }
 
 function _doProcess(locCol,hfCol,yearCol,monthCol,indCols,threshold) {
+    _locCol = locCol; _hfCol = hfCol; // save for use in outputs & heatmap
     // --- Step 1: Base data with report indicator ---
     const df = rawData.data.map(row=>{
         const indSum = indCols.reduce((s,c)=>s+(parseFloat(row[c])||0),0);
@@ -665,27 +667,27 @@ function _doProcess(locCol,hfCol,yearCol,monthCol,indCols,threshold) {
         const locDateMap={};
         allMethodRows[m].forEach(r=>{
             const k=`${r._loc}|||${r._date}`;
-            if(!locDateMap[k]) locDateMap[k]={location:r._loc,date:r._date,year:r._year,month:r._month,n_reported:0,n_active:0};
+            if(!locDateMap[k]) locDateMap[k]={[locCol]:r._loc,date:r._date,year:r._year,month:r._month,n_reported:0,n_active:0};
             locDateMap[k].n_reported += (r.active===1&&r.report===1)?1:0;
             locDateMap[k].n_active   += r.active;
         });
         locMonthly[m] = Object.values(locDateMap).map(row=>({
             ...row,
             reporting_rate: row.n_active>0?Math.round(row.n_reported/row.n_active*10000)/100:null
-        })).sort((a,b)=>a.location.localeCompare(b.location)||a.date.localeCompare(b.date));
+        })).sort((a,b)=>String(a[locCol]).localeCompare(String(b[locCol]))||a.date.localeCompare(b.date));
 
         // Yearly aggregate
         const locYrMap={};
         allMethodRows[m].forEach(r=>{
             const k=`${r._loc}|||${r._year}`;
-            if(!locYrMap[k]) locYrMap[k]={location:r._loc,year:r._year,n_reported:0,n_active:0};
+            if(!locYrMap[k]) locYrMap[k]={[locCol]:r._loc,year:r._year,n_reported:0,n_active:0};
             locYrMap[k].n_reported += (r.active===1&&r.report===1)?1:0;
             locYrMap[k].n_active   += r.active;
         });
         locYearly[m] = Object.values(locYrMap).map(row=>({
             ...row,
             reporting_rate: row.n_active>0?Math.round(row.n_reported/row.n_active*10000)/100:null
-        })).sort((a,b)=>a.location.localeCompare(b.location)||(a.year-b.year));
+        })).sort((a,b)=>String(a[locCol]).localeCompare(String(b[locCol]))||(a.year-b.year));
     });
 
     // --- Step 5: All-HF RR — numerator = reported, denominator = ALL hf (with + no reports) per location per period ---
@@ -739,7 +741,7 @@ function _doProcess(locCol,hfCol,yearCol,monthCol,indCols,threshold) {
             if (!hasData) return;
             const nReported = (reportedByLocDate[k]||new Set()).size;
             allHFLocMonthlyFlat.push({
-                location:loc, date,
+                [locCol]:loc, date,
                 year:parseInt(date.split('-')[0]), month:parseInt(date.split('-')[1]),
                 n_total_hf:totalHF, n_reported_hf:nReported,
                 allhf_rr: Math.round(nReported/totalHF*10000)/100
@@ -751,14 +753,14 @@ function _doProcess(locCol,hfCol,yearCol,monthCol,indCols,threshold) {
             const k = `${loc}|||${year}`;
             const nReported = (reportedByLocYear[k]||new Set()).size;
             allHFLocYearlyFlat.push({
-                location:loc, year,
+                [locCol]:loc, year,
                 n_total_hf:totalHF, n_reported_hf:nReported,
                 allhf_rr: Math.round(nReported/totalHF*10000)/100
             });
         });
     });
-    allHFLocMonthlyFlat.sort((a,b)=>a.location.localeCompare(b.location)||a.date.localeCompare(b.date));
-    allHFLocYearlyFlat.sort((a,b)=>a.location.localeCompare(b.location)||(a.year-b.year));
+    allHFLocMonthlyFlat.sort((a,b)=>String(a[locCol]).localeCompare(String(b[locCol]))||a.date.localeCompare(b.date));
+    allHFLocYearlyFlat.sort((a,b)=>String(a[locCol]).localeCompare(String(b[locCol]))||(a.year-b.year));
     window._allHFMonthly = allHFLocMonthlyFlat;
     window._allHFYearly  = allHFLocYearlyFlat;
 
@@ -877,7 +879,7 @@ function renderOutputList() {
 }
 
 function flatRow(r, m) {
-    const out = { location:r._loc||r.location, hf:r._hf||r.hf, year:r._year||r.year, month:r._month||r.month, date:r._date||r.date, report:r.report };
+    const out = { [_locCol]:r._loc||r[_locCol], [_hfCol]:r._hf||r[_hfCol], year:r._year||r.year, month:r._month||r.month, date:r._date||r.date, report:r.report };
     if (m > 0 && r.active !== undefined) out.active = r.active;
     Object.keys(r).filter(k=>!k.startsWith('_')&&k!=='report'&&k!=='active').forEach(k=>{ if(!(k in out)) out[k]=r[k]; });
     return out;
@@ -904,10 +906,10 @@ function generateHeatmap() {
 
     if (rrType==='allhf_rr') {
         data = level==='monthly' ? (window._allHFMonthly||[]) : (window._allHFYearly||[]);
-        locKey='location'; timeKey = level==='monthly'?'date':'year'; rrKey='allhf_rr';
+        locKey=_locCol; timeKey = level==='monthly'?'date':'year'; rrKey='allhf_rr';
     } else {
         data = level==='monthly' ? locMonthly[method] : locYearly[method];
-        locKey='location'; timeKey = level==='monthly'?'date':'year'; rrKey='reporting_rate';
+        locKey=_locCol; timeKey = level==='monthly'?'date':'year'; rrKey='reporting_rate';
     }
 
     if (!data||!data.length) { showAlert('No data for selected options','error'); return; }
