@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ICF-SL Reporting Rate Calculator v2</title>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { margin: 0; padding: 20px; background: #f0f4f8; font-family: 'Oswald', Arial, sans-serif; color: #000; font-weight: 500; }
+        .page-container { width: 100%; max-width: 1400px; margin: 0 auto; }
+        .page-header { background: linear-gradient(135deg, #003060 0%, #004080 60%, #0056a8 100%); color: #fff; padding: 28px 30px; text-align: center; margin-bottom: 0; border-radius: 12px 12px 0 0; border-bottom: 4px solid #ffc107; }
+        .logo-row { display: flex; justify-content: center; align-items: center; gap: 30px; margin-bottom: 15px; }
+        .logo-box { background: #fff; border-radius: 8px; padding: 8px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+        .logo-box img { width: 90px; height: auto; border-radius: 6px; }
+        .page-header h3 { margin: 10px 0 4px; font-size: 13px; font-weight: 700; letter-spacing: 1.5px; color: #ffc107; text-transform: uppercase; }
+        .page-header .tagline { margin: 0; font-size: 11px; font-weight: 400; color: #cde; font-style: italic; }
+        .page-header h1 { margin: 16px 0 8px; font-size: 26px; font-weight: 700; color: #fff; letter-spacing: 2px; text-transform: uppercase; }
+        .version-badge { display: inline-block; background: #ffc107; color: #003060; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; margin-left: 8px; vertical-align: middle; }
+        .page-header .subtitle { font-size: 13px; color: #cde; font-weight: 400; }
+
+        .main-card { border: 4px double #004080; border-top: none; border-radius: 0 0 12px 12px; background: #fff; box-shadow: 0 6px 20px rgba(0,64,128,0.12); margin-bottom: 20px; }
+        .content-inner { padding: 28px; }
+
+        .upload-section { background: linear-gradient(135deg, #e7f3ff 0%, #f0f8ff 100%); padding: 2.5rem; border-radius: 10px; border: 2.5px dashed #004080; text-align: center; margin: 1.5rem 0; transition: all 0.3s; }
+        .upload-section:hover { border-color: #0056b3; background: linear-gradient(135deg, #dceeff, #eef6ff); }
+        .upload-section h3 { color: #004080; margin-bottom: 0.75rem; font-size: 20px; font-weight: 700; letter-spacing: 1px; }
+        .upload-section p { color: #444; font-size: 13px; }
+
+        .file-input-wrapper { position: relative; display: inline-block; cursor: pointer; background: #004080; color: white; padding: 14px 28px; border-radius: 6px; border: 2px solid #004080; font-size: 14px; font-weight: 700; transition: all 0.3s; text-transform: uppercase; letter-spacing: 1px; font-family: 'Oswald', Arial, sans-serif; margin-top: 1.25rem; }
+        .file-input-wrapper:hover { background: #0056b3; border-color: #0056b3; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,64,128,0.3); }
+        .file-input-wrapper input[type="file"] { position: absolute; left: -9999px; }
+
+        .section-header { background: linear-gradient(90deg, #004080, #0056b3); color: #fff; padding: 14px 20px; margin: 20px 0 16px; border-radius: 8px; display: flex; align-items: center; gap: 14px; border-left: 5px solid #ffc107; }
+        .section-icon { background: #ffc107; color: #003060; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; flex-shrink: 0; }
+        .section-title { font-size: 16px; font-weight: 700; letter-spacing: 1px; }
+
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+        .stats-card { background: #f8f9fa; padding: 1.1rem; border-radius: 8px; text-align: center; border: 2px solid #004080; transition: all 0.2s; }
+        .stats-card:hover { transform: translateY(-3px); box-shadow: 0 4px 14px rgba(0,64,128,0.2); }
+        .stats-card h4 { color: #666; font-size: 10px; margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stats-card .metric-value { font-size: 1.55rem; color: #004080; font-weight: 700; line-height: 1; }
+        .stats-card p { color: #666; font-size: 10px; margin-top: 4px; }
+
+        .btn { padding: 12px 22px; border: 2px solid #004080; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px; font-family: 'Oswald', Arial, sans-serif; transition: all 0.2s; margin: 4px; }
+        .btn:hover { transform: translateY(-1px); }
+        .btn-primary { background: #004080; color: #fff; }
+        .btn-primary:hover { background: #0056b3; border-color: #0056b3; }
+        .btn-secondary { background: #fff; color: #004080; }
+        .btn-secondary:hover { background: #004080; color: #fff; }
+        .btn-success { background: #28a745; color: #fff; border-color: #28a745; }
+        .btn-success:hover { background: #218838; border-color: #218838; }
+        .btn-warning { background: #ffc107; color: #003060; border-color: #ffc107; }
+        .btn-warning:hover { background: #e0a800; border-color: #e0a800; }
+        .btn-sm { padding: 7px 14px; font-size: 11px; }
+
+        .alert { padding: 1rem 1.25rem; border-radius: 6px; margin: 1rem 0; font-weight: 500; font-size: 13px; }
+        .alert-success { background: #d4edda; border: 2px solid #28a745; color: #155724; }
+        .alert-error { background: #f8d7da; border: 2px solid #dc3545; color: #721c24; }
+        .alert-info { background: #e7f3ff; border: 2px solid #004080; color: #003060; }
+        .alert-warning { background: #fff3cd; border: 2px solid #ffc107; color: #664d03; }
+        .hidden { display: none !important; }
+
+        .config-card { background: #f8f9fa; padding: 1.5rem; border-radius: 8px; border: 2px solid #004080; margin: 1rem 0; }
+        .config-card h4 { color: #004080; margin-bottom: 0.75rem; font-size: 15px; font-weight: 700; border-bottom: 1px solid #dee2e6; padding-bottom: 6px; }
+
+        .form-group { margin-bottom: 1.1rem; }
+        .form-group label { display: block; margin-bottom: 0.4rem; font-weight: 700; color: #004080; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .form-control { width: 100%; padding: 0.65rem 0.9rem; border: 2px solid #004080; border-radius: 6px; font-size: 13px; background: #fff; color: #000; font-family: 'Oswald', Arial, sans-serif; font-weight: 500; }
+        .form-control:focus { outline: none; border-color: #0056b3; box-shadow: 0 0 0 3px rgba(0,64,128,0.12); }
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1.1rem; }
+
+        .loading-overlay { position: fixed; inset: 0; background: rgba(0,32,64,0.7); display: flex; align-items: center; justify-content: center; z-index: 9999; flex-direction: column; gap: 16px; }
+        .loading-spinner { border: 5px solid rgba(255,255,255,0.2); border-top: 5px solid #ffc107; border-radius: 50%; width: 56px; height: 56px; animation: spin 0.9s linear infinite; }
+        .loading-text { color: #fff; font-size: 15px; font-weight: 700; letter-spacing: 1px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Method selector */
+        .method-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin: 1rem 0; }
+        .method-card { border: 2.5px solid #dee2e6; border-radius: 10px; padding: 1.25rem; cursor: pointer; transition: all 0.25s; background: #fff; }
+        .method-card:hover { border-color: #004080; background: #f0f6ff; }
+        .method-card.selected { border-color: #004080; background: #e7f3ff; box-shadow: 0 0 0 3px rgba(0,64,128,0.15); }
+        .method-card input[type="radio"] { display: none; }
+        .method-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 0.75rem; }
+        .method-badge { background: #004080; color: #fff; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+        .method-card.selected .method-badge { background: #ffc107; color: #003060; }
+        .method-title { font-size: 14px; font-weight: 700; color: #004080; }
+        .method-desc { font-size: 12px; color: #555; line-height: 1.55; }
+        .method-example { margin-top: 0.6rem; background: #fff3cd; border-radius: 5px; padding: 0.5rem 0.75rem; font-size: 11px; color: #664d03; line-height: 1.5; border-left: 3px solid #ffc107; }
+
+        /* Checkbox group */
+        .checkbox-group { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.5rem; }
+        .checkbox-item { display: flex; align-items: center; gap: 6px; background: #fff; border: 1.5px solid #004080; border-radius: 5px; padding: 5px 10px; cursor: pointer; transition: all 0.2s; }
+        .checkbox-item:hover { background: #e7f3ff; }
+        .checkbox-item.checked { background: #004080; border-color: #004080; }
+        .checkbox-item.checked label { color: #fff; }
+        .checkbox-item input[type="checkbox"] { width: 15px; height: 15px; accent-color: #004080; }
+        .checkbox-item label { font-size: 12px; color: #000; font-weight: 600; cursor: pointer; }
+        .checkbox-item.checked input { accent-color: #ffc107; }
+
+        /* Results table */
+        .results-table-wrap { overflow-x: auto; border-radius: 8px; border: 2px solid #004080; }
+        .results-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .results-table th { background: #004080; color: #fff; padding: 10px 12px; font-size: 11px; letter-spacing: 0.5px; text-align: left; font-weight: 700; white-space: nowrap; }
+        .results-table td { padding: 9px 12px; border-bottom: 1px solid #e0e8f0; white-space: nowrap; }
+        .results-table tr:nth-child(even) { background: #f4f8fc; }
+        .results-table tr:hover { background: #e7f3ff; }
+        .rr-cell { font-weight: 700; border-radius: 4px; padding: 3px 8px !important; }
+
+        /* Method comparison grid */
+        .method-compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin: 1rem 0; }
+        .method-stat-box { border: 2px solid #004080; border-radius: 8px; overflow: hidden; }
+        .method-stat-box .mbox-header { background: #004080; color: #fff; padding: 10px 14px; font-size: 13px; font-weight: 700; }
+        .method-stat-box .mbox-body { padding: 14px; }
+        .method-stat-box .mbox-rate { font-size: 2rem; font-weight: 700; color: #004080; line-height: 1; }
+        .method-stat-box .mbox-label { font-size: 11px; color: #666; margin-top: 4px; }
+        .method-stat-box .mbox-sub { font-size: 11px; color: #444; margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee; }
+
+        /* Output list */
+        .output-list { background: #f8f9fa; border-radius: 8px; overflow: hidden; }
+        .output-group { margin-bottom: 0; }
+        .output-group-title { background: #003060; color: #ffc107; padding: 8px 14px; font-size: 12px; font-weight: 700; letter-spacing: 1px; }
+        .output-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid #dee2e6; gap: 10px; }
+        .output-item:last-child { border-bottom: none; }
+        .output-item-info { flex: 1; min-width: 0; }
+        .output-item-info strong { font-size: 12px; color: #000; display: block; }
+        .output-item-info span { font-size: 11px; color: #666; }
+
+        /* Heatmap */
+        .chart-container { background: #f8f9fa; padding: 1.5rem; border-radius: 8px; border: 2px solid #004080; margin: 1rem 0; text-align: center; overflow-x: auto; }
+        .heatmap-canvas { border-radius: 6px; background: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 2px solid #004080; display: block; margin: 0 auto; max-width: 100%; }
+
+        /* Palette */
+        .palette-selector { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.7rem; margin: 0.75rem 0; }
+        .palette-option { background: #f8f9fa; padding: 0.6rem; border-radius: 8px; border: 2px solid #ddd; cursor: pointer; transition: all 0.2s; text-align: center; }
+        .palette-option:hover { border-color: #004080; }
+        .palette-option.selected { border-color: #28a745; background: #d4edda; }
+        .palette-preview { display: flex; justify-content: center; gap: 2px; margin-bottom: 0.4rem; height: 14px; }
+        .palette-preview .color-box { flex: 1; border-radius: 2px; }
+        .palette-name { font-size: 10px; font-weight: 700; color: #004080; }
+
+        /* Step boxes */
+        .step-box { background: #e7f3ff; border: 2px solid #004080; border-radius: 8px; padding: 0.9rem 1.1rem; margin: 0.6rem 0; }
+        .step-box h5 { color: #004080; font-size: 13px; margin-bottom: 0.4rem; font-weight: 700; }
+        .step-box p { color: #000; font-size: 12px; line-height: 1.6; }
+        .step-box code { background: #fff; padding: 2px 5px; border-radius: 3px; font-family: monospace; font-size: 11px; color: #004080; }
+
+        .page-footer { background: linear-gradient(135deg, #003060, #004080); color: #fff; padding: 20px 30px; text-align: center; font-size: 12px; line-height: 1.7; border-radius: 0 0 12px 12px; }
+        .page-footer .footer-top { font-weight: 700; font-size: 13px; color: #ffc107; }
+
+        .tab-bar { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 2px solid #004080; padding-bottom: 0; }
+        .tab-btn { padding: 9px 16px; border: 2px solid transparent; border-bottom: none; border-radius: 6px 6px 0 0; font-size: 12px; font-weight: 700; cursor: pointer; font-family: 'Oswald', sans-serif; background: #e7f3ff; color: #004080; transition: all 0.2s; margin-bottom: -2px; }
+        .tab-btn.active { background: #004080; color: #fff; border-color: #004080; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .threshold-row { display: flex; align-items: center; gap: 10px; margin-top: 0.75rem; background: #fff3cd; border-radius: 6px; padding: 0.75rem 1rem; border: 1.5px solid #ffc107; }
+        .threshold-row label { font-size: 13px; font-weight: 700; color: #664d03; white-space: nowrap; }
+        .threshold-row input { width: 80px; }
+        .threshold-row span { font-size: 12px; color: #664d03; }
+
+        ::-webkit-scrollbar { width: 7px; height: 7px; }
+        ::-webkit-scrollbar-track { background: #f0f4f8; }
+        ::-webkit-scrollbar-thumb { background: #004080; border-radius: 4px; }
+        @media (max-width: 768px) { body { padding: 8px; } .content-inner { padding: 14px; } .page-header h1 { font-size: 20px; } }
+    </style>
+</head>
+<body>
+<div class="page-container">
+    <div class="page-header">
+        <div class="logo-row">
+            <div class="logo-box">
+                <img src="https://github.com/mohamedsillahkanu/gdp-dashboard-2/raw/6c7463b0d5c3be150aafae695a4bcbbd8aeb1499/ICF-SL.jpg" alt="ICF-SL Logo">
+            </div>
+        </div>
+        <h3>Informatics Consultancy Firm-Sierra Leone (ICF-SL)</h3>
+        <p class="tagline"><em>Driving Data-Driven Solutions for Health and Development</em></p>
+        <h1>REPORTING RATE CALCULATOR <span class="version-badge">v2.0</span></h1>
+        <p class="subtitle">Three Activation Methods · Flexible Variable Selection · Multi-Output Analysis</p>
+    </div>
+
+    <div class="main-card">
+        <div class="content-inner">
+            <div id="loadingOverlay" class="loading-overlay hidden">
+                <div class="loading-spinner"></div>
+                <div class="loading-text">Processing data, please wait…</div>
+            </div>
+
+            <div id="alertContainer"></div>
+
+            <!-- ===== UPLOAD SECTION ===== -->
+            <div id="uploadSection">
+                <div class="upload-section">
+                    <h3>📂 UPLOAD YOUR DATA FILE</h3>
+                    <p>Accepts CSV or Excel (.xlsx / .xls) with health facility reporting data</p>
+                    <label class="file-input-wrapper">
+                        Choose File
+                        <input type="file" id="fileInput" accept=".csv,.xlsx,.xls">
+                    </label>
+                </div>
+
+                <div class="section-header">
+                    <span class="section-icon">?</span>
+                    <span class="section-title">HOW THIS TOOL WORKS</span>
+                </div>
+                <div class="step-box"><h5>Step 1 – Compute Report Indicator</h5><p>For each facility-period row: <code>report = 1</code> if the SUM of your selected indicator columns &gt; 0, else <code>report = 0</code>. You choose which columns define "reported".</p></div>
+                <div class="step-box"><h5>Step 2 – Classify HFs With / Without Reports</h5><p>Facilities that never have <code>report = 1</code> in any period go to the <em>no-reports</em> output. The rest are analysed further.</p></div>
+                <div class="step-box"><h5>Step 3 – Determine Active Status (Choose a Method)</h5><p><strong>Method 1 – Permanent:</strong> once a facility first reports, it is Active for all subsequent periods.<br>
+                <strong>Method 2 – First-to-Last:</strong> Active only between its first and last reporting period.<br>
+                <strong>Method 3 – Dynamic:</strong> Active immediately after reporting; becomes Inactive after N consecutive non-reporting periods; reactivates when it reports again.</p></div>
+                <div class="step-box"><h5>Step 4 – Calculate Reporting Rate</h5><p><code>RR = (Σ report where active=1) / (Σ active=1) × 100</code> — aggregated by location and time period. Also produces a simple all-HF rate without active-status filtering.</p></div>
+            </div>
+
+            <!-- ===== COLUMN SELECTION ===== -->
+            <div id="columnSection" class="hidden">
+                <div class="section-header">
+                    <span class="section-icon">1</span>
+                    <span class="section-title">CONFIGURE COLUMNS &amp; METHOD</span>
+                </div>
+                <div class="stats-grid" id="dataStats"></div>
+
+                <!-- Geographic & Time -->
+                <div class="config-card">
+                    <h4>Geographic &amp; Time Columns</h4>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="locationColumn">Location Column (Aggregation Level)</label>
+                            <select id="locationColumn" class="form-control"><option value="">-- Select --</option></select>
+                            <small style="color:#666;font-size:11px;">e.g. District, Chiefdom — used for heatmap Y-axis</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="hfColumn">Health Facility Column</label>
+                            <select id="hfColumn" class="form-control"><option value="">-- Select --</option></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="yearColumn">Year Column</label>
+                            <select id="yearColumn" class="form-control"><option value="">-- Select --</option></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="monthColumn">Month Column</label>
+                            <select id="monthColumn" class="form-control"><option value="">-- Select --</option></select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Indicator columns -->
+                <div class="config-card">
+                    <h4>Indicator Columns — Define "Reported"</h4>
+                    <p style="font-size:12px;color:#555;margin-bottom:1rem;"><code>report = 1</code> when the SUM of all checked columns &gt; 0 for that row. Select all columns that together define whether a facility reported in a given period.</p>
+                    <div class="checkbox-group" id="indicatorCheckboxes"></div>
+                </div>
+
+                <!-- Activation method -->
+                <div class="config-card">
+                    <h4>Activation Method for Denominator</h4>
+                    <p style="font-size:12px;color:#555;margin-bottom:1rem;">The method controls which facility-period rows count in the denominator (expected to report). All three methods are computed; choose the primary one for the heatmap, but all outputs are downloadable.</p>
+                    <div class="method-grid">
+                        <label class="method-card selected" onclick="selectMethod(1)">
+                            <input type="radio" name="activationMethod" value="1" checked>
+                            <div class="method-card-header">
+                                <div class="method-badge">1</div>
+                                <div class="method-title">Permanent Activation</div>
+                            </div>
+                            <div class="method-desc">Once a facility reports for the first time, it is considered Active for ALL subsequent periods — even if it stops reporting later.</div>
+                            <div class="method-example">hf_0001 first reports in 2024-03 → Active from 2024-03 through end of data, regardless of gaps.</div>
+                        </label>
+                        <label class="method-card" onclick="selectMethod(2)">
+                            <input type="radio" name="activationMethod" value="2">
+                            <div class="method-card-header">
+                                <div class="method-badge">2</div>
+                                <div class="method-title">First-to-Last Window</div>
+                            </div>
+                            <div class="method-desc">Active between the first reporting period and the last reporting period only. Periods after the last report are considered Inactive.</div>
+                            <div class="method-example">hf_0001 reports 2024-03 to 2024-09 → Active 03–09 only. Months after 2024-09 are Inactive.</div>
+                        </label>
+                        <label class="method-card" onclick="selectMethod(3)">
+                            <input type="radio" name="activationMethod" value="3">
+                            <div class="method-card-header">
+                                <div class="method-badge">3</div>
+                                <div class="method-title">Dynamic Activation</div>
+                            </div>
+                            <div class="method-desc">Activates on first report; becomes Inactive after N consecutive non-reporting periods; reactivates when reporting resumes.</div>
+                            <div class="method-example">N = 6 → hf_0001 goes Inactive after 6 consecutive months with no data; reactivates the month it reports again.</div>
+                        </label>
+                    </div>
+                    <div class="threshold-row" id="thresholdRow" style="display:none;">
+                        <label for="inactiveThreshold">Inactivity Threshold (N months):</label>
+                        <input type="number" id="inactiveThreshold" class="form-control" value="6" min="1" max="24" style="width:80px;">
+                        <span>A facility becomes Inactive after this many consecutive non-reporting months.</span>
+                    </div>
+                </div>
+
+                <div style="text-align:center;margin-top:1.5rem;">
+                    <button class="btn btn-primary" onclick="processData()">▶ Process Data</button>
+                    <button class="btn btn-secondary" onclick="resetApp()">↺ Start Over</button>
+                </div>
+            </div>
+
+            <!-- ===== RESULTS SECTION ===== -->
+            <div id="resultsSection" class="hidden">
+                <div class="section-header">
+                    <span class="section-icon">2</span>
+                    <span class="section-title">RESULTS OVERVIEW</span>
+                </div>
+                <div class="stats-grid" id="summaryStats"></div>
+
+                <!-- Method comparison -->
+                <div class="config-card">
+                    <h4>Overall Reporting Rate — All Three Methods</h4>
+                    <div class="method-compare" id="methodCompare"></div>
+                </div>
+
+                <!-- Downloads -->
+                <div class="config-card">
+                    <h4>Download Output Files</h4>
+                    <div class="output-list" id="outputList"></div>
+                </div>
+
+                <!-- Heatmap -->
+                <div class="section-header" style="margin-top:2rem;">
+                    <span class="section-icon">3</span>
+                    <span class="section-title">HEATMAP VISUALIZATION</span>
+                </div>
+
+                <div class="config-card">
+                    <h4>Select Dataset for Heatmap</h4>
+                    <div class="form-row">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label for="heatmapMethod">Activation Method</label>
+                            <select id="heatmapMethod" class="form-control">
+                                <option value="1">Method 1 — Permanent Activation</option>
+                                <option value="2">Method 2 — First-to-Last</option>
+                                <option value="3">Method 3 — Dynamic</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label for="heatmapRRType">Rate Type</label>
+                            <select id="heatmapRRType" class="form-control">
+                                <option value="method_rr">Method-based RR (active HF denominator)</option>
+                                <option value="simple_rr">Simple RR (all HF denominator)</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label for="heatmapLevel">Time Aggregation</label>
+                            <select id="heatmapLevel" class="form-control" onchange="updateHeatmapXLabel()">
+                                <option value="monthly">Monthly</option>
+                                <option value="yearly">Yearly</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="config-card">
+                    <h4>Color Palette <span style="font-size:11px;color:#28a745;font-weight:500;">(CB = Colorblind-Friendly)</span></h4>
+                    <div class="palette-selector" id="paletteSelector"></div>
+                </div>
+
+                <div class="config-card">
+                    <h4>Labels &amp; Size</h4>
+                    <div class="form-row">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label for="chartTitle">Chart Title</label>
+                            <input type="text" id="chartTitle" class="form-control" value="Reporting Rate Heatmap">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label for="xAxisLabel">X-Axis Label</label>
+                            <input type="text" id="xAxisLabel" class="form-control" value="Time Period">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label for="yAxisLabel">Y-Axis Label</label>
+                            <input type="text" id="yAxisLabel" class="form-control" value="Location (High → Low)">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label for="canvasWidth">Width (px)</label>
+                            <input type="number" id="canvasWidth" class="form-control" value="1000" min="400" max="3000" step="50">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label for="canvasHeight">Height (px)</label>
+                            <input type="number" id="canvasHeight" class="form-control" value="700" min="300" max="2500" step="50">
+                        </div>
+                    </div>
+                    <div class="form-row" style="margin-top:0.75rem;">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label for="titleFontSize">Title (px)</label>
+                            <input type="number" id="titleFontSize" class="form-control" value="18" min="10" max="36">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label for="axisLabelFontSize">Axis Label (px)</label>
+                            <input type="number" id="axisLabelFontSize" class="form-control" value="12" min="8" max="24">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label for="tickFontSize">Tick (px)</label>
+                            <input type="number" id="tickFontSize" class="form-control" value="10" min="6" max="18">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label for="legendFontSize">Legend (px)</label>
+                            <input type="number" id="legendFontSize" class="form-control" value="11" min="8" max="18">
+                        </div>
+                    </div>
+                </div>
+
+                <div style="text-align:center;margin:1.25rem 0;">
+                    <button class="btn btn-primary" onclick="generateHeatmap()">🗺 Generate Heatmap</button>
+                </div>
+
+                <div class="chart-container hidden" id="chartContainer">
+                    <canvas id="heatmapCanvas" class="heatmap-canvas"></canvas>
+                </div>
+
+                <div style="text-align:center;margin-top:1rem;" id="downloadButtons" class="hidden">
+                    <button class="btn btn-success" onclick="downloadHeatmap()">⬇ Download PNG</button>
+                    <button class="btn btn-secondary" onclick="backToConfig()">← Back to Settings</button>
+                    <button class="btn btn-warning" onclick="resetApp()">↺ New File</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="page-footer">
+        <div class="footer-top">National Malaria Control Programme</div>
+        <div>Ministry of Health and Sanitation, Sierra Leone</div>
+        <div style="font-size:10px;margin-top:4px;color:#aac;">© 2025 Informatics Consultancy Firm-Sierra Leone (ICF-SL) · Reporting Rate Calculator v2.0</div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+let rawData = null, allColumns = [], selectedPalette = 'viridis', selectedMethod = 1;
+
+// Processed outputs (keyed by method 1,2,3)
+let hfWithReports = [], hfNoReports = [];
+let hfMonthly = { 1: [], 2: [], 3: [] };
+let locMonthly = { 1: [], 2: [], 3: [] };
+let locYearly  = { 1: [], 2: [], 3: [] };
+let simpleLocMonthly = [], simpleLocYearly = [];
+
+// ============================================================
+// COLOR PALETTES
+// ============================================================
+const colorPalettes = {
+    viridis:        { name:'Viridis', cb:true,  c:[[68,1,84],[72,40,120],[62,74,137],[49,104,142],[38,130,142],[31,158,137],[53,183,121],[109,205,89],[180,222,44],[253,231,37]] },
+    plasma:         { name:'Plasma', cb:true,   c:[[13,8,135],[75,3,161],[126,3,168],[168,34,150],[204,71,120],[232,107,90],[250,149,64],[252,194,52],[239,248,33]] },
+    cividis:        { name:'Cividis', cb:true,  c:[[0,32,77],[0,65,108],[59,91,112],[99,113,114],[137,135,114],[176,158,110],[216,183,103],[255,210,93]] },
+    blueYellow:     { name:'Blue-Yellow', cb:true, c:[[0,68,136],[35,100,150],[70,130,160],[105,160,170],[150,190,180],[195,210,170],[230,220,140],[255,230,90]] },
+    rdYlGn:         { name:'Red-Yellow-Green', cb:false, c:[[165,0,38],[215,48,39],[244,109,67],[253,174,97],[254,224,139],[255,255,191],[217,239,139],[166,217,106],[102,189,99],[26,152,80],[0,104,55]] },
+    blues:          { name:'Blues', cb:false,   c:[[247,251,255],[198,219,239],[107,174,214],[33,113,181],[8,48,107]] },
+    greens:         { name:'Greens', cb:false,  c:[[247,252,245],[199,233,192],[116,196,118],[35,139,69],[0,68,27]] }
+};
+
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+    renderPaletteSelector();
+    document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+});
+
+function renderPaletteSelector() {
+    document.getElementById('paletteSelector').innerHTML = Object.entries(colorPalettes).map(([k, p]) => `
+        <div class="palette-option ${k===selectedPalette?'selected':''}" onclick="selectPalette('${k}')" data-palette="${k}">
+            <div class="palette-preview">${p.c.slice(0,7).map(c=>`<div class="color-box" style="background:rgb(${c})"></div>`).join('')}</div>
+            <div class="palette-name">${p.name}${p.cb?' (CB)':''}</div>
+        </div>`).join('');
+}
+function selectPalette(k) { selectedPalette=k; document.querySelectorAll('.palette-option').forEach(o=>o.classList.toggle('selected',o.dataset.palette===k)); }
+
+function selectMethod(n) {
+    selectedMethod = n;
+    document.querySelectorAll('.method-card').forEach(c => c.classList.remove('selected'));
+    document.querySelectorAll('input[name="activationMethod"]').forEach(r => r.checked = parseInt(r.value)===n);
+    document.querySelectorAll('.method-card').forEach(c => {
+        const v = parseInt(c.querySelector('input').value);
+        if (v===n) c.classList.add('selected');
+    });
+    document.getElementById('thresholdRow').style.display = n===3 ? 'flex' : 'none';
+    document.getElementById('heatmapMethod').value = String(n);
+}
+
+function showAlert(msg, type='info') {
+    document.getElementById('alertContainer').innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+    if (type==='success') setTimeout(()=>document.getElementById('alertContainer').innerHTML='', 5000);
+}
+function showLoading(v) { document.getElementById('loadingOverlay').classList.toggle('hidden', !v); }
+function updateHeatmapXLabel() {
+    document.getElementById('xAxisLabel').value = document.getElementById('heatmapLevel').value==='yearly' ? 'Year' : 'Time Period (YYYY-MM)';
+}
+
+// ============================================================
+// FILE UPLOAD
+// ============================================================
+async function handleFileUpload(e) {
+    const file = e.target.files[0]; if (!file) return;
+    showLoading(true);
+    try {
+        const data = await readFile(file);
+        rawData = data; allColumns = data.columns;
+        document.getElementById('dataStats').innerHTML = `
+            <div class="stats-card"><div class="metric-value">${data.rowCount.toLocaleString()}</div><p>Total Rows</p></div>
+            <div class="stats-card"><div class="metric-value">${data.columns.length}</div><p>Columns</p></div>
+            <div class="stats-card"><div class="metric-value">${file.name.split('.').pop().toUpperCase()}</div><p>File Format</p></div>`;
+        populateDropdowns(); populateCheckboxes(); autoSelect();
+        document.getElementById('uploadSection').classList.add('hidden');
+        document.getElementById('columnSection').classList.remove('hidden');
+        showAlert(`✔ Loaded ${file.name}: ${data.rowCount.toLocaleString()} rows, ${data.columns.length} columns`, 'success');
+    } catch(err) { showAlert(`Error: ${err.message}`, 'error'); }
+    finally { showLoading(false); }
+}
+
+async function readFile(file) {
+    return new Promise((resolve, reject) => {
+        const ext = file.name.toLowerCase().split('.').pop();
+        const reader = new FileReader();
+        reader.onload = e => {
+            try {
+                let data;
+                if (ext==='csv') data = Papa.parse(e.target.result,{header:true,skipEmptyLines:true,dynamicTyping:true}).data;
+                else if (['xlsx','xls'].includes(ext)) { const wb=XLSX.read(e.target.result,{type:'array'}); data=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]); }
+                else { reject(new Error(`Unsupported format: ${ext}`)); return; }
+                const cleaned = data.filter(r=>Object.values(r).some(v=>v!==null&&v!==undefined&&String(v).trim()!==''));
+                resolve({name:file.name,data:cleaned,columns:Object.keys(cleaned[0]||{}),rowCount:cleaned.length});
+            } catch(err){reject(err);}
+        };
+        reader.onerror=()=>reject(new Error('File read error'));
+        ext==='csv'?reader.readAsText(file):reader.readAsArrayBuffer(file);
+    });
+}
+
+function populateDropdowns() {
+    ['locationColumn','hfColumn','yearColumn','monthColumn'].forEach(id => {
+        document.getElementById(id).innerHTML = '<option value="">-- Select --</option>' +
+            allColumns.map(c=>`<option value="${c}">${c}</option>`).join('');
+    });
+}
+function populateCheckboxes() {
+    const defaultKeys = ['allout','susp','test','conf','maltreat'];
+    document.getElementById('indicatorCheckboxes').innerHTML = allColumns.map(col => {
+        const checked = defaultKeys.some(k=>col.toLowerCase().includes(k));
+        return `<div class="checkbox-item ${checked?'checked':''}" id="wrap_${CSS.escape(col)}" onclick="toggleCheckbox('${col.replace(/'/g,"\\'")}')">
+            <input type="checkbox" id="ind_${CSS.escape(col)}" value="${col}" ${checked?'checked':''}>
+            <label for="ind_${CSS.escape(col)}">${col}</label>
+        </div>`;
+    }).join('');
+}
+function toggleCheckbox(col) {
+    const cb = document.querySelector(`#indicatorCheckboxes input[value="${col}"]`);
+    if (!cb) return;
+    cb.checked = !cb.checked;
+    cb.closest('.checkbox-item').classList.toggle('checked', cb.checked);
+}
+function autoSelect() {
+    const pat = {
+        locationColumn:['adm1','adm2','adm3','region','district','chiefdom','province'],
+        hfColumn:['hf_uid','hf','facility','health_facility','hf_name'],
+        yearColumn:['year','yr'],
+        monthColumn:['month','mon','mth']
+    };
+    allColumns.forEach(col => {
+        const cl = col.toLowerCase();
+        Object.entries(pat).forEach(([id,kw])=>{
+            if (kw.some(k=>cl===k||cl.includes(k))) {
+                const s=document.getElementById(id); if(!s.value) s.value=col;
+            }
+        });
+    });
+}
+
+// ============================================================
+// ACTIVE STATUS COMPUTATION
+// ============================================================
+function computeActiveStatus(rows, method, threshold) {
+    // rows sorted by date for ONE facility
+    if (method === 1) {
+        let firstIdx = rows.findIndex(r=>r.report===1);
+        return rows.map((r,i)=>({...r, active: firstIdx===-1?0:(i>=firstIdx?1:0)}));
+    }
+    if (method === 2) {
+        let firstIdx = rows.findIndex(r=>r.report===1);
+        let lastIdx  = rows.reduce((l,r,i)=>r.report===1?i:l,-1);
+        return rows.map((r,i)=>({...r, active: firstIdx===-1?0:(i>=firstIdx&&i<=lastIdx?1:0)}));
+    }
+    if (method === 3) {
+        let result=[], consecutive=0, active=false;
+        for (let i=0;i<rows.length;i++) {
+            const r=rows[i];
+            if (r.report===1) { active=true; consecutive=0; }
+            else { if(active){consecutive++; if(consecutive>=threshold) active=false; } }
+            result.push({...r, active: active?1:0});
+        }
+        return result;
+    }
+}
+
+// ============================================================
+// MAIN PROCESSING
+// ============================================================
+function processData() {
+    const locationCol = document.getElementById('locationColumn').value;
+    const hfCol       = document.getElementById('hfColumn').value;
+    const yearCol     = document.getElementById('yearColumn').value;
+    const monthCol    = document.getElementById('monthColumn').value;
+    const threshold   = parseInt(document.getElementById('inactiveThreshold').value)||6;
+    const indicatorCols = [...document.querySelectorAll('#indicatorCheckboxes input[type="checkbox"]:checked')].map(cb=>cb.value);
+
+    if (!locationCol||!hfCol||!yearCol||!monthCol) { showAlert('Please select Location, HF, Year and Month columns.','error'); return; }
+    if (!indicatorCols.length) { showAlert('Please select at least one indicator column.','error'); return; }
+
+    showLoading(true);
+    setTimeout(()=>{
+        try { _doProcess(locationCol,hfCol,yearCol,monthCol,indicatorCols,threshold); }
+        catch(err){ showAlert(`Processing error: ${err.message}`,'error'); console.error(err); }
+        finally { showLoading(false); }
+    },60);
+}
+
+function _doProcess(locCol,hfCol,yearCol,monthCol,indCols,threshold) {
+    // --- Step 1: Base data with report indicator ---
+    const df = rawData.data.map(row=>{
+        const indSum = indCols.reduce((s,c)=>s+(parseFloat(row[c])||0),0);
+        return {
+            ...row,
+            _loc: String(row[locCol]||''),
+            _hf:  String(row[hfCol]||''),
+            _year: parseInt(row[yearCol])||0,
+            _month: parseInt(row[monthCol])||0,
+            _date: `${parseInt(row[yearCol])||0}-${String(parseInt(row[monthCol])||0).padStart(2,'0')}`,
+            report: indSum>0?1:0
+        };
+    });
+
+    // --- Step 2: Split HFs with/without any report ---
+    const facilityEverReported = {};
+    df.forEach(r=>{
+        const k=`${r._loc}|||${r._hf}`;
+        if (!facilityEverReported[k]) facilityEverReported[k]=0;
+        if (r.report>facilityEverReported[k]) facilityEverReported[k]=r.report;
+    });
+
+    const dfWith = df.filter(r=>facilityEverReported[`${r._loc}|||${r._hf}`]===1);
+    const dfNone = df.filter(r=>facilityEverReported[`${r._loc}|||${r._hf}`]===0);
+    hfWithReports = dfWith;
+    hfNoReports   = dfNone;
+
+    // --- Step 3: Group by facility, sort by date, compute active status for all 3 methods ---
+    const facilityGroups = {};
+    dfWith.forEach(r=>{
+        const k=`${r._loc}|||${r._hf}`;
+        if (!facilityGroups[k]) facilityGroups[k]=[];
+        facilityGroups[k].push(r);
+    });
+    Object.values(facilityGroups).forEach(rows=>rows.sort((a,b)=>a._date.localeCompare(b._date)));
+
+    const allMethodRows = {1:[],2:[],3:[]};
+    Object.values(facilityGroups).forEach(rows=>{
+        [1,2,3].forEach(m=>{
+            const withActive = computeActiveStatus(rows, m, threshold);
+            allMethodRows[m].push(...withActive);
+        });
+    });
+    hfMonthly = allMethodRows;
+
+    // --- Step 4: Aggregate by location+date (method-based RR) ---
+    [1,2,3].forEach(m=>{
+        const locDateMap={};
+        allMethodRows[m].forEach(r=>{
+            const k=`${r._loc}|||${r._date}`;
+            if(!locDateMap[k]) locDateMap[k]={location:r._loc,date:r._date,year:r._year,month:r._month,n_reported:0,n_active:0};
+            locDateMap[k].n_reported += (r.active===1&&r.report===1)?1:0;
+            locDateMap[k].n_active   += r.active;
+        });
+        locMonthly[m] = Object.values(locDateMap).map(row=>({
+            ...row,
+            reporting_rate: row.n_active>0?Math.round(row.n_reported/row.n_active*10000)/100:null
+        })).sort((a,b)=>a.location.localeCompare(b.location)||a.date.localeCompare(b.date));
+
+        // Yearly aggregate
+        const locYrMap={};
+        allMethodRows[m].forEach(r=>{
+            const k=`${r._loc}|||${r._year}`;
+            if(!locYrMap[k]) locYrMap[k]={location:r._loc,year:r._year,n_reported:0,n_active:0};
+            locYrMap[k].n_reported += (r.active===1&&r.report===1)?1:0;
+            locYrMap[k].n_active   += r.active;
+        });
+        locYearly[m] = Object.values(locYrMap).map(row=>({
+            ...row,
+            reporting_rate: row.n_active>0?Math.round(row.n_reported/row.n_active*10000)/100:null
+        })).sort((a,b)=>a.location.localeCompare(b.location)||(a.year-b.year));
+    });
+
+    // --- Step 5: Simple RR (all HF denominator — all facilities regardless of active status) ---
+    // Count total distinct HFs per location at each period, and how many reported
+    const simpleDateMap={};
+    df.forEach(r=>{
+        const k=`${r._loc}|||${r._date}`;
+        if(!simpleDateMap[k]) simpleDateMap[k]={location:r._loc,date:r._date,year:r._year,month:r._month,hfs_total:new Set(),hfs_reported:new Set()};
+        simpleDateMap[k].hfs_total.add(r._hf);
+        if(r.report===1) simpleDateMap[k].hfs_reported.add(r._hf);
+    });
+    simpleLocMonthly = Object.values(simpleDateMap).map(row=>({
+        location:row.location, date:row.date, year:row.year, month:row.month,
+        n_total_hf: row.hfs_total.size, n_reported_hf: row.hfs_reported.size,
+        simple_rr: Math.round(row.hfs_reported.size/row.hfs_total.size*10000)/100
+    })).sort((a,b)=>a.location.localeCompare(b.location)||a.date.localeCompare(b.date));
+
+    const simpleYrMap={};
+    df.forEach(r=>{
+        const k=`${r._loc}|||${r._year}`;
+        if(!simpleYrMap[k]) simpleYrMap[k]={location:r._loc,year:r._year,hfs_total:new Set(),hfs_reported:new Set()};
+        simpleYrMap[k].hfs_total.add(r._hf);
+        if(r.report===1) simpleYrMap[k].hfs_reported.add(r._hf);
+    });
+    simpleLocYearly = Object.values(simpleYrMap).map(row=>({
+        location:row.location, year:row.year,
+        n_total_hf:row.hfs_total.size, n_reported_hf:row.hfs_reported.size,
+        simple_rr:Math.round(row.hfs_reported.size/row.hfs_total.size*10000)/100
+    })).sort((a,b)=>a.location.localeCompare(b.location)||(a.year-b.year));
+
+    // --- Render results ---
+    renderSummary(threshold);
+    renderOutputList();
+    document.getElementById('columnSection').classList.add('hidden');
+    document.getElementById('resultsSection').classList.remove('hidden');
+    document.getElementById('heatmapMethod').value = String(selectedMethod);
+    showAlert('✔ Data processed successfully! All three methods computed.','success');
+}
+
+// ============================================================
+// RENDER SUMMARY
+// ============================================================
+function renderSummary(threshold) {
+    const totalHFs  = new Set(rawData.data.map(r=>`${r[document.getElementById('locationColumn').value]}|||${r[document.getElementById('hfColumn').value]}`)).size;
+    const withRep   = new Set(hfWithReports.map(r=>`${r._loc}|||${r._hf}`)).size;
+    const noRep     = new Set(hfNoReports.map(r=>`${r._loc}|||${r._hf}`)).size;
+    const uniqueLocs= new Set(hfWithReports.map(r=>r._loc)).size;
+    const periods   = new Set(hfWithReports.map(r=>r._date)).size;
+
+    document.getElementById('summaryStats').innerHTML = `
+        <div class="stats-card"><div class="metric-value">${totalHFs.toLocaleString()}</div><p>Total Facilities</p></div>
+        <div class="stats-card"><div class="metric-value">${withRep.toLocaleString()}</div><p>With ≥1 Report</p></div>
+        <div class="stats-card"><div class="metric-value">${noRep.toLocaleString()}</div><p>Never Reported</p></div>
+        <div class="stats-card"><div class="metric-value">${uniqueLocs}</div><p>Locations</p></div>
+        <div class="stats-card"><div class="metric-value">${periods}</div><p>Periods</p></div>`;
+
+    // Method comparison
+    const overallRR = m => {
+        const rows = locMonthly[m];
+        const totN = rows.reduce((s,r)=>s+r.n_reported,0);
+        const totD = rows.reduce((s,r)=>s+r.n_active,0);
+        return totD>0 ? (totN/totD*100).toFixed(1) : 'N/A';
+    };
+    const simpleRR = () => {
+        const totN = simpleLocMonthly.reduce((s,r)=>s+r.n_reported_hf,0);
+        const totD = simpleLocMonthly.reduce((s,r)=>s+r.n_total_hf,0);
+        return totD>0?(totN/totD*100).toFixed(1):'N/A';
+    };
+    const rrColor = v => { const n=parseFloat(v); if(isNaN(n)) return '#999'; return n>=80?'#28a745':n>=50?'#ffc107':'#dc3545'; };
+
+    document.getElementById('methodCompare').innerHTML = [
+        {m:1,label:'Method 1 — Permanent',sub:`Active from first report onward`},
+        {m:2,label:'Method 2 — First-to-Last',sub:`Active between first and last report`},
+        {m:3,label:`Method 3 — Dynamic (N=${threshold})`,sub:`Inactive after ${threshold} consecutive months`},
+        {m:0,label:'Simple (All HF)',sub:'All facilities as denominator'}
+    ].map(({m,label,sub}) => {
+        const rr = m===0?simpleRR():overallRR(m);
+        return `<div class="method-stat-box">
+            <div class="mbox-header">${label}</div>
+            <div class="mbox-body">
+                <div class="mbox-rate" style="color:${rrColor(rr)}">${rr}%</div>
+                <div class="mbox-label">Overall Reporting Rate</div>
+                <div class="mbox-sub">${sub}</div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+// ============================================================
+// OUTPUT LIST
+// ============================================================
+function renderOutputList() {
+    const grps = [
+        { title:'Facility-Level', items:[
+            {label:'hf_with_reports.xlsx', desc:'All facility-period rows where HF has ≥1 report (base data)', fn:()=>dlExcel(hfWithReports,'hf_with_reports')},
+            {label:'hf_no_reports.xlsx',   desc:'Facility-period rows for HFs that never reported', fn:()=>dlExcel(hfNoReports,'hf_no_reports')}
+        ]},
+        { title:'Method 1 — Permanent Activation', items:[
+            {label:'hf_monthly_method1.xlsx', desc:`HF × period with active status (Method 1) — ${hfMonthly[1].length.toLocaleString()} rows`, fn:()=>dlExcel(hfMonthly[1].map(r=>flatRow(r,1)),'hf_monthly_method1')},
+            {label:'location_monthly_method1.xlsx', desc:`Location × period RR — ${locMonthly[1].length.toLocaleString()} rows`, fn:()=>dlExcel(locMonthly[1],'location_monthly_method1')},
+            {label:'location_yearly_method1.xlsx',  desc:`Location × year RR — ${locYearly[1].length.toLocaleString()} rows`,  fn:()=>dlExcel(locYearly[1],'location_yearly_method1')}
+        ]},
+        { title:'Method 2 — First-to-Last Window', items:[
+            {label:'hf_monthly_method2.xlsx', desc:`HF × period with active status (Method 2) — ${hfMonthly[2].length.toLocaleString()} rows`, fn:()=>dlExcel(hfMonthly[2].map(r=>flatRow(r,2)),'hf_monthly_method2')},
+            {label:'location_monthly_method2.xlsx', desc:`Location × period RR — ${locMonthly[2].length.toLocaleString()} rows`, fn:()=>dlExcel(locMonthly[2],'location_monthly_method2')},
+            {label:'location_yearly_method2.xlsx',  desc:`Location × year RR — ${locYearly[2].length.toLocaleString()} rows`,  fn:()=>dlExcel(locYearly[2],'location_yearly_method2')}
+        ]},
+        { title:'Method 3 — Dynamic Activation', items:[
+            {label:'hf_monthly_method3.xlsx', desc:`HF × period with active status (Method 3) — ${hfMonthly[3].length.toLocaleString()} rows`, fn:()=>dlExcel(hfMonthly[3].map(r=>flatRow(r,3)),'hf_monthly_method3')},
+            {label:'location_monthly_method3.xlsx', desc:`Location × period RR — ${locMonthly[3].length.toLocaleString()} rows`, fn:()=>dlExcel(locMonthly[3],'location_monthly_method3')},
+            {label:'location_yearly_method3.xlsx',  desc:`Location × year RR — ${locYearly[3].length.toLocaleString()} rows`,  fn:()=>dlExcel(locYearly[3],'location_yearly_method3')}
+        ]},
+        { title:'Simple RR (All HF, No Active-Status Filter)', items:[
+            {label:'simple_rr_monthly.xlsx', desc:`Location × period simple RR — ${simpleLocMonthly.length.toLocaleString()} rows`, fn:()=>dlExcel(simpleLocMonthly,'simple_rr_monthly')},
+            {label:'simple_rr_yearly.xlsx',  desc:`Location × year simple RR — ${simpleLocYearly.length.toLocaleString()} rows`,  fn:()=>dlExcel(simpleLocYearly,'simple_rr_yearly')}
+        ]}
+    ];
+
+    document.getElementById('outputList').innerHTML = grps.map((g,gi)=>`
+        <div class="output-group">
+            <div class="output-group-title">${g.title}</div>
+            ${g.items.map((it,ii)=>`
+                <div class="output-item">
+                    <div class="output-item-info">
+                        <strong>${it.label}</strong>
+                        <span>${it.desc}</span>
+                    </div>
+                    <button class="btn btn-success btn-sm" onclick="outputGroups[${gi}].items[${ii}].fn()">⬇ Download</button>
+                </div>`).join('')}
+        </div>`).join('');
+
+    // Attach globally for onclick access
+    window.outputGroups = grps;
+}
+
+function flatRow(r, m) {
+    const out = { location:r._loc, hf:r._hf, year:r._year, month:r._month, date:r._date, report:r.report, active:r.active };
+    // include original columns that aren't internal
+    Object.keys(r).filter(k=>!k.startsWith('_')&&k!=='report'&&k!=='active').forEach(k=>out[k]=r[k]);
+    return out;
+}
+
+function dlExcel(data, name) {
+    if (!data||!data.length) { showAlert('No data to download','warning'); return; }
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Data');
+    XLSX.writeFile(wb, name+'.xlsx');
+    showAlert(`✔ Downloaded: ${name}.xlsx`,'success');
+}
+
+// ============================================================
+// HEATMAP
+// ============================================================
+function generateHeatmap() {
+    const method = parseInt(document.getElementById('heatmapMethod').value);
+    const rrType = document.getElementById('heatmapRRType').value;
+    const level  = document.getElementById('heatmapLevel').value;
+
+    let data, locKey, timeKey, rrKey;
+
+    if (rrType==='simple_rr') {
+        data = level==='monthly' ? simpleLocMonthly : simpleLocYearly;
+        locKey='location'; timeKey = level==='monthly'?'date':'year'; rrKey='simple_rr';
+    } else {
+        data = level==='monthly' ? locMonthly[method] : locYearly[method];
+        locKey='location'; timeKey = level==='monthly'?'date':'year'; rrKey='reporting_rate';
+    }
+
+    if (!data||!data.length) { showAlert('No data for selected options','error'); return; }
+    drawHeatmap(data, locKey, timeKey, rrKey);
+    document.getElementById('chartContainer').classList.remove('hidden');
+    document.getElementById('downloadButtons').classList.remove('hidden');
+}
+
+function drawHeatmap(data, locKey, timeKey, rrKey) {
+    const canvas  = document.getElementById('heatmapCanvas');
+    const ctx     = canvas.getContext('2d');
+    const title   = document.getElementById('chartTitle').value || 'Reporting Rate Heatmap';
+    const xLabel  = document.getElementById('xAxisLabel').value || 'Time Period';
+    const yLabel  = document.getElementById('yAxisLabel').value || 'Location';
+    const cW      = parseInt(document.getElementById('canvasWidth').value)||1000;
+    const cH      = parseInt(document.getElementById('canvasHeight').value)||700;
+    const tFS     = parseInt(document.getElementById('titleFontSize').value)||18;
+    const aFS     = parseInt(document.getElementById('axisLabelFontSize').value)||12;
+    const tkFS    = parseInt(document.getElementById('tickFontSize').value)||10;
+    const lgFS    = parseInt(document.getElementById('legendFontSize').value)||11;
+
+    const times   = [...new Set(data.map(r=>String(r[timeKey])))].sort();
+    const locMap  = {};
+    data.forEach(r=>{
+        const l=r[locKey];
+        if(!locMap[l]) locMap[l]={vals:{},sum:0,cnt:0};
+        const v=r[rrKey]??0;
+        locMap[l].vals[String(r[timeKey])]=v;
+        locMap[l].sum+=v; locMap[l].cnt++;
+    });
+    const locs = Object.entries(locMap).map(([l,d])=>({loc:l,avg:d.cnt?d.sum/d.cnt:0,vals:d.vals}));
+    locs.sort((a,b)=>b.avg-a.avg);
+
+    const mg = {top:110, bottom:90, left:55, right:30};
+    const hmW = cW-mg.left-mg.right, hmH = cH-mg.top-mg.bottom;
+    const cw = hmW/times.length, ch = hmH/locs.length;
+
+    canvas.width=cW; canvas.height=cH;
+    ctx.fillStyle='#fff'; ctx.fillRect(0,0,cW,cH);
+
+    const sx=mg.left, sy=mg.top;
+
+    // Title
+    ctx.fillStyle='#004080'; ctx.font=`bold ${tFS}px Oswald,sans-serif`;
+    ctx.textAlign='center'; ctx.fillText(title, cW/2, 28);
+
+    // Legend
+    const lgY=48, lgW=280, lgX=(cW-lgW)/2;
+    ctx.fillStyle='#f8f9fa'; ctx.fillRect(lgX-22,lgY-6,lgW+44,46);
+    ctx.strokeStyle='#004080'; ctx.lineWidth=1; ctx.strokeRect(lgX-22,lgY-6,lgW+44,46);
+    ctx.fillStyle='#004080'; ctx.font=`bold ${lgFS}px Oswald,sans-serif`;
+    ctx.fillText('Reporting Rate (%)',cW/2,lgY+9);
+    for(let i=0;i<=lgW;i++){ctx.fillStyle=getColor(i/lgW);ctx.fillRect(lgX+i,lgY+16,1,12);}
+    ctx.strokeRect(lgX,lgY+16,lgW,12);
+    ctx.fillStyle='#333'; ctx.font=`${lgFS-2}px Oswald,sans-serif`;
+    [0,25,50,75,100].forEach(t=>{ctx.fillText(`${t}%`,lgX+(t/100)*lgW,lgY+40);});
+
+    // Y axis label
+    ctx.save(); ctx.translate(16,sy+hmH/2); ctx.rotate(-Math.PI/2);
+    ctx.fillStyle='#004080'; ctx.font=`bold ${aFS}px Oswald,sans-serif`; ctx.textAlign='center';
+    ctx.fillText(yLabel,0,0); ctx.restore();
+
+    // X axis label
+    ctx.fillStyle='#004080'; ctx.font=`bold ${aFS}px Oswald,sans-serif`; ctx.textAlign='center';
+    ctx.fillText(xLabel,sx+hmW/2,cH-8);
+
+    // Cells
+    locs.forEach(({loc,vals},li)=>{
+        times.forEach((t,ti)=>{
+            const v=vals[t]??null;
+            ctx.fillStyle = v===null?'#eee':getColor(v/100);
+            ctx.fillRect(sx+ti*cw,sy+li*ch,cw+0.5,ch+0.5);
+        });
+    });
+
+    // Y axis ticks (location names)
+    ctx.textAlign='right'; ctx.fillStyle='#333'; ctx.font=`${tkFS}px Oswald,sans-serif`;
+    const yStep = Math.max(1,Math.ceil(locs.length/40));
+    locs.forEach(({loc},li)=>{
+        if(li%yStep===0){
+            const label = loc.length>22?loc.substring(0,20)+'…':loc;
+            ctx.fillText(label, sx-5, sy+li*ch+ch/2+tkFS/2-1);
+        }
+    });
+
+    // X axis ticks
+    ctx.textAlign='right'; ctx.fillStyle='#333'; ctx.font=`${tkFS}px Oswald,sans-serif`;
+    const xStep = Math.max(1,Math.ceil(times.length/24));
+    times.forEach((t,ti)=>{
+        if(ti%xStep===0){
+            ctx.save(); ctx.translate(sx+ti*cw+cw/2+3,sy+hmH+8);
+            ctx.rotate(-Math.PI/2); ctx.fillText(t,0,0); ctx.restore();
+        }
+    });
+
+    // Info text
+    ctx.fillStyle='#888'; ctx.font=`${tkFS-1}px Oswald,sans-serif`; ctx.textAlign='right';
+    ctx.fillText(`${locs.length} locations × ${times.length} periods`,cW-5,cH-3);
+}
+
+function getColor(t) {
+    t=Math.max(0,Math.min(1,t));
+    const cs=colorPalettes[selectedPalette].c;
+    const idx=t*(cs.length-1), lo=Math.floor(idx), hi=Math.ceil(idx), rt=idx-lo;
+    if(lo===hi) return `rgb(${cs[lo]})`;
+    return `rgb(${Math.round(cs[lo][0]*(1-rt)+cs[hi][0]*rt)},${Math.round(cs[lo][1]*(1-rt)+cs[hi][1]*rt)},${Math.round(cs[lo][2]*(1-rt)+cs[hi][2]*rt)})`;
+}
+
+function downloadHeatmap() {
+    const canvas=document.getElementById('heatmapCanvas');
+    const a=document.createElement('a');
+    a.download=(document.getElementById('chartTitle').value||'reporting_rate').replace(/[^a-z0-9]/gi,'_').toLowerCase()+'.png';
+    a.href=canvas.toDataURL('image/png'); a.click();
+    showAlert('✔ Heatmap downloaded!','success');
+}
+
+function backToConfig() {
+    document.getElementById('resultsSection').classList.add('hidden');
+    document.getElementById('columnSection').classList.remove('hidden');
+}
+
+function resetApp() {
+    rawData=null; allColumns=[]; selectedPalette='viridis'; selectedMethod=1;
+    hfWithReports=[]; hfNoReports=[];
+    hfMonthly={1:[],2:[],3:[]}; locMonthly={1:[],2:[],3:[]}; locYearly={1:[],2:[],3:[]};
+    simpleLocMonthly=[]; simpleLocYearly=[];
+    document.getElementById('fileInput').value='';
+    ['uploadSection','columnSection','resultsSection'].forEach((id,i)=>{
+        document.getElementById(id).classList.toggle('hidden',i!==0);
+    });
+    ['chartContainer','downloadButtons'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+    document.getElementById('alertContainer').innerHTML='';
+    document.getElementById('thresholdRow').style.display='none';
+    document.querySelectorAll('.method-card').forEach(c=>c.classList.remove('selected'));
+    document.querySelector('.method-card').classList.add('selected');
+    document.querySelector('input[name="activationMethod"]').checked=true;
+    renderPaletteSelector();
+}
+</script>
+</body>
+</html>
