@@ -338,8 +338,8 @@
                         <div class="form-group" style="margin-bottom:0;">
                             <label for="heatmapRRType">Rate Type</label>
                             <select id="heatmapRRType" class="form-control">
-                                <option value="method_rr">Method-based RR (active HF denominator)</option>
-                                <option value="simple_rr">Simple RR (all HF denominator)</option>
+                                <option value="method_rr">RR — HF with ≥1 Report (active denominator)</option>
+                                <option value="allhf_rr">RR — All HF (all facilities as denominator)</option>
                             </select>
                         </div>
                         <div class="form-group" style="margin-bottom:0;">
@@ -536,11 +536,9 @@ function populateDropdowns() {
     });
 }
 function populateCheckboxes() {
-    const defaultKeys = ['allout','susp','test','conf','maltreat'];
     document.getElementById('indicatorCheckboxes').innerHTML = allColumns.map(col => {
-        const checked = defaultKeys.some(k=>col.toLowerCase().includes(k));
-        return `<div class="checkbox-item ${checked?'checked':''}" id="wrap_${CSS.escape(col)}" onclick="toggleCheckbox('${col.replace(/'/g,"\\'")}')">
-            <input type="checkbox" id="ind_${CSS.escape(col)}" value="${col}" ${checked?'checked':''}>
+        return `<div class="checkbox-item" id="wrap_${CSS.escape(col)}" onclick="toggleCheckbox('${col.replace(/'/g,"\\'")}')">
+            <input type="checkbox" id="ind_${CSS.escape(col)}" value="${col}">
             <label for="ind_${CSS.escape(col)}">${col}</label>
         </div>`;
     }).join('');
@@ -690,33 +688,79 @@ function _doProcess(locCol,hfCol,yearCol,monthCol,indCols,threshold) {
         })).sort((a,b)=>a.location.localeCompare(b.location)||(a.year-b.year));
     });
 
-    // --- Step 5: Simple RR (all HF denominator — all facilities regardless of active status) ---
-    // Count total distinct HFs per location at each period, and how many reported
-    const simpleDateMap={};
-    df.forEach(r=>{
-        const k=`${r._loc}|||${r._date}`;
-        if(!simpleDateMap[k]) simpleDateMap[k]={location:r._loc,date:r._date,year:r._year,month:r._month,hfs_total:new Set(),hfs_reported:new Set()};
-        simpleDateMap[k].hfs_total.add(r._hf);
-        if(r.report===1) simpleDateMap[k].hfs_reported.add(r._hf);
-    });
-    simpleLocMonthly = Object.values(simpleDateMap).map(row=>({
-        location:row.location, date:row.date, year:row.year, month:row.month,
-        n_total_hf: row.hfs_total.size, n_reported_hf: row.hfs_reported.size,
-        simple_rr: Math.round(row.hfs_reported.size/row.hfs_total.size*10000)/100
-    })).sort((a,b)=>a.location.localeCompare(b.location)||a.date.localeCompare(b.date));
+    // --- Step 5: All-HF RR — numerator = reported, denominator = ALL hf (with + no reports) per location per period ---
+    // For "active" denominator: active HFs from hfMonthly[m] + all no-report HFs as always active
+    // For simplicity: All-HF RR = (HFs that reported in period) / (all distinct HFs in period), per location
+    // Also compute per-method All-HF RR where denominator respects active status from method but includes no-report HFs as permanently inactive (not counted)
+    // Per user request: All HF RR = all HF (report + no report) as denominator, numerator = those that reported
 
-    const simpleYrMap={};
-    df.forEach(r=>{
-        const k=`${r._loc}|||${r._year}`;
-        if(!simpleYrMap[k]) simpleYrMap[k]={location:r._loc,year:r._year,hfs_total:new Set(),hfs_reported:new Set()};
-        simpleYrMap[k].hfs_total.add(r._hf);
-        if(r.report===1) simpleYrMap[k].hfs_reported.add(r._hf);
+    const allHFLocMonthly = {1:{},2:{},3:{}};
+    const allHFLocYearly  = {1:{},2:{},3:{}};
+
+    // Build a date list
+    const allDates = [...new Set(df.map(r=>r._date))].sort();
+    const allYears = [...new Set(df.map(r=>r._year))].sort();
+
+    // For each method, per location+period:
+    //   denominator = active HFs (from hfMonthly[m]) + all no-report HFs treated as inactive = only active HFs count in denom
+    //   BUT user said "all HF RR" = all HF (report + no-report) as denominator
+    // So: All-HF RR denom = total distinct HFs at that location (ever), numerator = those that reported that period
+
+    // Build total HFs per location
+    const allHFsByLoc = {};
+    df.forEach(r => {
+        if (!allHFsByLoc[r._loc]) allHFsByLoc[r._loc] = new Set();
+        allHFsByLoc[r._loc].add(r._hf);
     });
-    simpleLocYearly = Object.values(simpleYrMap).map(row=>({
-        location:row.location, year:row.year,
-        n_total_hf:row.hfs_total.size, n_reported_hf:row.hfs_reported.size,
-        simple_rr:Math.round(row.hfs_reported.size/row.hfs_total.size*10000)/100
-    })).sort((a,b)=>a.location.localeCompare(b.location)||(a.year-b.year));
+
+    // Build reported HFs per location+period
+    const reportedByLocDate = {};
+    df.forEach(r => {
+        const k = `${r._loc}|||${r._date}`;
+        if (!reportedByLocDate[k]) reportedByLocDate[k] = new Set();
+        if (r.report === 1) reportedByLocDate[k].add(r._hf);
+    });
+    const reportedByLocYear = {};
+    df.forEach(r => {
+        const k = `${r._loc}|||${r._year}`;
+        if (!reportedByLocYear[k]) reportedByLocYear[k] = new Set();
+        if (r.report === 1) reportedByLocYear[k].add(r._hf);
+    });
+
+    // All-HF monthly & yearly (same regardless of method — denom is all HF ever at that location)
+    const allHFLocMonthlyFlat = [], allHFLocYearlyFlat = [];
+    const locsAll = Object.keys(allHFsByLoc);
+    locsAll.forEach(loc => {
+        const totalHF = allHFsByLoc[loc].size;
+        allDates.forEach(date => {
+            const k = `${loc}|||${date}`;
+            // only include if there's any row for this loc+date
+            const hasData = df.some(r=>r._loc===loc&&r._date===date);
+            if (!hasData) return;
+            const nReported = (reportedByLocDate[k]||new Set()).size;
+            allHFLocMonthlyFlat.push({
+                location:loc, date,
+                year:parseInt(date.split('-')[0]), month:parseInt(date.split('-')[1]),
+                n_total_hf:totalHF, n_reported_hf:nReported,
+                allhf_rr: Math.round(nReported/totalHF*10000)/100
+            });
+        });
+        allYears.forEach(year => {
+            const hasData = df.some(r=>r._loc===loc&&r._year===year);
+            if (!hasData) return;
+            const k = `${loc}|||${year}`;
+            const nReported = (reportedByLocYear[k]||new Set()).size;
+            allHFLocYearlyFlat.push({
+                location:loc, year,
+                n_total_hf:totalHF, n_reported_hf:nReported,
+                allhf_rr: Math.round(nReported/totalHF*10000)/100
+            });
+        });
+    });
+    allHFLocMonthlyFlat.sort((a,b)=>a.location.localeCompare(b.location)||a.date.localeCompare(b.date));
+    allHFLocYearlyFlat.sort((a,b)=>a.location.localeCompare(b.location)||(a.year-b.year));
+    window._allHFMonthly = allHFLocMonthlyFlat;
+    window._allHFYearly  = allHFLocYearlyFlat;
 
     // --- Render results ---
     renderSummary(threshold);
@@ -744,36 +788,43 @@ function renderSummary(threshold) {
         <div class="stats-card"><div class="metric-value">${uniqueLocs}</div><p>Locations</p></div>
         <div class="stats-card"><div class="metric-value">${periods}</div><p>Periods</p></div>`;
 
-    // Method comparison
-    const overallRR = m => {
+    // Method comparison — show both RR types per method
+    const activeRR = m => {
         const rows = locMonthly[m];
         const totN = rows.reduce((s,r)=>s+r.n_reported,0);
         const totD = rows.reduce((s,r)=>s+r.n_active,0);
         return totD>0 ? (totN/totD*100).toFixed(1) : 'N/A';
     };
-    const simpleRR = () => {
-        const totN = simpleLocMonthly.reduce((s,r)=>s+r.n_reported_hf,0);
-        const totD = simpleLocMonthly.reduce((s,r)=>s+r.n_total_hf,0);
+    const allHFRR = () => {
+        const rows = window._allHFMonthly||[];
+        const totN = rows.reduce((s,r)=>s+r.n_reported_hf,0);
+        const totD = rows.reduce((s,r)=>s+r.n_total_hf,0);
         return totD>0?(totN/totD*100).toFixed(1):'N/A';
     };
     const rrColor = v => { const n=parseFloat(v); if(isNaN(n)) return '#999'; return n>=80?'#28a745':n>=50?'#ffc107':'#dc3545'; };
+    const methLabels = {1:'Method 1 — Permanent',2:'Method 2 — First-to-Last',3:`Method 3 — Dynamic (N=${threshold})`};
 
-    document.getElementById('methodCompare').innerHTML = [
-        {m:1,label:'Method 1 — Permanent',sub:`Active from first report onward`},
-        {m:2,label:'Method 2 — First-to-Last',sub:`Active between first and last report`},
-        {m:3,label:`Method 3 — Dynamic (N=${threshold})`,sub:`Inactive after ${threshold} consecutive months`},
-        {m:0,label:'Simple (All HF)',sub:'All facilities as denominator'}
-    ].map(({m,label,sub}) => {
-        const rr = m===0?simpleRR():overallRR(m);
-        return `<div class="method-stat-box">
-            <div class="mbox-header">${label}</div>
-            <div class="mbox-body">
-                <div class="mbox-rate" style="color:${rrColor(rr)}">${rr}%</div>
-                <div class="mbox-label">Overall Reporting Rate</div>
-                <div class="mbox-sub">${sub}</div>
+    document.getElementById('methodCompare').innerHTML = `
+        <div style="grid-column:1/-1;margin-bottom:4px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;">
+                ${[1,2,3].map(m=>`
+                <div class="method-stat-box">
+                    <div class="mbox-header">${methLabels[m]}</div>
+                    <div class="mbox-body">
+                        <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #eee;">
+                            <div style="font-size:11px;font-weight:700;color:#004080;text-transform:uppercase;margin-bottom:4px;">RR — HF with ≥1 Report</div>
+                            <div class="mbox-rate" style="color:${rrColor(activeRR(m))}">${activeRR(m)}%</div>
+                            <div class="mbox-label">Active HF denominator</div>
+                        </div>
+                        <div>
+                            <div style="font-size:11px;font-weight:700;color:#664d03;text-transform:uppercase;margin-bottom:4px;">RR — All HF</div>
+                            <div class="mbox-rate" style="color:${rrColor(allHFRR())};font-size:1.4rem;">${allHFRR()}%</div>
+                            <div class="mbox-label">All HF denominator (incl. never reported)</div>
+                        </div>
+                    </div>
+                </div>`).join('')}
             </div>
         </div>`;
-    }).join('');
 }
 
 // ============================================================
@@ -782,27 +833,29 @@ function renderSummary(threshold) {
 function renderOutputList() {
     const grps = [
         { title:'Facility-Level', items:[
-            {label:'hf_with_reports.xlsx', desc:'All facility-period rows where HF has ≥1 report (base data)', fn:()=>dlExcel(hfWithReports,'hf_with_reports')},
-            {label:'hf_no_reports.xlsx',   desc:'Facility-period rows for HFs that never reported', fn:()=>dlExcel(hfNoReports,'hf_no_reports')}
+            {label:'hf_with_reports.xlsx', desc:'All facility-period rows where HF has ≥1 report (base data)', fn:()=>dlExcel(hfWithReports.map(r=>flatRow(r,0)),'hf_with_reports')},
+            {label:'hf_no_reports.xlsx',   desc:'Facility-period rows for HFs that never reported', fn:()=>dlExcel(hfNoReports.map(r=>flatRow(r,0)),'hf_no_reports')}
         ]},
         { title:'Method 1 — Permanent Activation', items:[
             {label:'hf_monthly_method1.xlsx', desc:`HF × period with active status (Method 1) — ${hfMonthly[1].length.toLocaleString()} rows`, fn:()=>dlExcel(hfMonthly[1].map(r=>flatRow(r,1)),'hf_monthly_method1')},
-            {label:'location_monthly_method1.xlsx', desc:`Location × period RR — ${locMonthly[1].length.toLocaleString()} rows`, fn:()=>dlExcel(locMonthly[1],'location_monthly_method1')},
-            {label:'location_yearly_method1.xlsx',  desc:`Location × year RR — ${locYearly[1].length.toLocaleString()} rows`,  fn:()=>dlExcel(locYearly[1],'location_yearly_method1')}
+            {label:'rr_active_hf_monthly_m1.xlsx', desc:`RR for HF with ≥1 report · Location × period — ${locMonthly[1].length.toLocaleString()} rows`, fn:()=>dlExcel(locMonthly[1],'rr_active_hf_monthly_m1')},
+            {label:'rr_active_hf_yearly_m1.xlsx',  desc:`RR for HF with ≥1 report · Location × year — ${locYearly[1].length.toLocaleString()} rows`,  fn:()=>dlExcel(locYearly[1],'rr_active_hf_yearly_m1')},
+            {label:'rr_all_hf_monthly_m1.xlsx', desc:`RR for All HF · Location × period — ${(window._allHFMonthly||[]).length.toLocaleString()} rows`, fn:()=>dlExcel(window._allHFMonthly||[],'rr_all_hf_monthly_m1')},
+            {label:'rr_all_hf_yearly_m1.xlsx',  desc:`RR for All HF · Location × year — ${(window._allHFYearly||[]).length.toLocaleString()} rows`,  fn:()=>dlExcel(window._allHFYearly||[],'rr_all_hf_yearly_m1')}
         ]},
         { title:'Method 2 — First-to-Last Window', items:[
             {label:'hf_monthly_method2.xlsx', desc:`HF × period with active status (Method 2) — ${hfMonthly[2].length.toLocaleString()} rows`, fn:()=>dlExcel(hfMonthly[2].map(r=>flatRow(r,2)),'hf_monthly_method2')},
-            {label:'location_monthly_method2.xlsx', desc:`Location × period RR — ${locMonthly[2].length.toLocaleString()} rows`, fn:()=>dlExcel(locMonthly[2],'location_monthly_method2')},
-            {label:'location_yearly_method2.xlsx',  desc:`Location × year RR — ${locYearly[2].length.toLocaleString()} rows`,  fn:()=>dlExcel(locYearly[2],'location_yearly_method2')}
+            {label:'rr_active_hf_monthly_m2.xlsx', desc:`RR for HF with ≥1 report · Location × period — ${locMonthly[2].length.toLocaleString()} rows`, fn:()=>dlExcel(locMonthly[2],'rr_active_hf_monthly_m2')},
+            {label:'rr_active_hf_yearly_m2.xlsx',  desc:`RR for HF with ≥1 report · Location × year — ${locYearly[2].length.toLocaleString()} rows`,  fn:()=>dlExcel(locYearly[2],'rr_active_hf_yearly_m2')},
+            {label:'rr_all_hf_monthly_m2.xlsx', desc:`RR for All HF · Location × period — ${(window._allHFMonthly||[]).length.toLocaleString()} rows`, fn:()=>dlExcel(window._allHFMonthly||[],'rr_all_hf_monthly_m2')},
+            {label:'rr_all_hf_yearly_m2.xlsx',  desc:`RR for All HF · Location × year — ${(window._allHFYearly||[]).length.toLocaleString()} rows`,  fn:()=>dlExcel(window._allHFYearly||[],'rr_all_hf_yearly_m2')}
         ]},
         { title:'Method 3 — Dynamic Activation', items:[
             {label:'hf_monthly_method3.xlsx', desc:`HF × period with active status (Method 3) — ${hfMonthly[3].length.toLocaleString()} rows`, fn:()=>dlExcel(hfMonthly[3].map(r=>flatRow(r,3)),'hf_monthly_method3')},
-            {label:'location_monthly_method3.xlsx', desc:`Location × period RR — ${locMonthly[3].length.toLocaleString()} rows`, fn:()=>dlExcel(locMonthly[3],'location_monthly_method3')},
-            {label:'location_yearly_method3.xlsx',  desc:`Location × year RR — ${locYearly[3].length.toLocaleString()} rows`,  fn:()=>dlExcel(locYearly[3],'location_yearly_method3')}
-        ]},
-        { title:'Simple RR (All HF, No Active-Status Filter)', items:[
-            {label:'simple_rr_monthly.xlsx', desc:`Location × period simple RR — ${simpleLocMonthly.length.toLocaleString()} rows`, fn:()=>dlExcel(simpleLocMonthly,'simple_rr_monthly')},
-            {label:'simple_rr_yearly.xlsx',  desc:`Location × year simple RR — ${simpleLocYearly.length.toLocaleString()} rows`,  fn:()=>dlExcel(simpleLocYearly,'simple_rr_yearly')}
+            {label:'rr_active_hf_monthly_m3.xlsx', desc:`RR for HF with ≥1 report · Location × period — ${locMonthly[3].length.toLocaleString()} rows`, fn:()=>dlExcel(locMonthly[3],'rr_active_hf_monthly_m3')},
+            {label:'rr_active_hf_yearly_m3.xlsx',  desc:`RR for HF with ≥1 report · Location × year — ${locYearly[3].length.toLocaleString()} rows`,  fn:()=>dlExcel(locYearly[3],'rr_active_hf_yearly_m3')},
+            {label:'rr_all_hf_monthly_m3.xlsx', desc:`RR for All HF · Location × period — ${(window._allHFMonthly||[]).length.toLocaleString()} rows`, fn:()=>dlExcel(window._allHFMonthly||[],'rr_all_hf_monthly_m3')},
+            {label:'rr_all_hf_yearly_m3.xlsx',  desc:`RR for All HF · Location × year — ${(window._allHFYearly||[]).length.toLocaleString()} rows`,  fn:()=>dlExcel(window._allHFYearly||[],'rr_all_hf_yearly_m3')}
         ]}
     ];
 
@@ -824,9 +877,9 @@ function renderOutputList() {
 }
 
 function flatRow(r, m) {
-    const out = { location:r._loc, hf:r._hf, year:r._year, month:r._month, date:r._date, report:r.report, active:r.active };
-    // include original columns that aren't internal
-    Object.keys(r).filter(k=>!k.startsWith('_')&&k!=='report'&&k!=='active').forEach(k=>out[k]=r[k]);
+    const out = { location:r._loc||r.location, hf:r._hf||r.hf, year:r._year||r.year, month:r._month||r.month, date:r._date||r.date, report:r.report };
+    if (m > 0 && r.active !== undefined) out.active = r.active;
+    Object.keys(r).filter(k=>!k.startsWith('_')&&k!=='report'&&k!=='active').forEach(k=>{ if(!(k in out)) out[k]=r[k]; });
     return out;
 }
 
@@ -849,9 +902,9 @@ function generateHeatmap() {
 
     let data, locKey, timeKey, rrKey;
 
-    if (rrType==='simple_rr') {
-        data = level==='monthly' ? simpleLocMonthly : simpleLocYearly;
-        locKey='location'; timeKey = level==='monthly'?'date':'year'; rrKey='simple_rr';
+    if (rrType==='allhf_rr') {
+        data = level==='monthly' ? (window._allHFMonthly||[]) : (window._allHFYearly||[]);
+        locKey='location'; timeKey = level==='monthly'?'date':'year'; rrKey='allhf_rr';
     } else {
         data = level==='monthly' ? locMonthly[method] : locYearly[method];
         locKey='location'; timeKey = level==='monthly'?'date':'year'; rrKey='reporting_rate';
